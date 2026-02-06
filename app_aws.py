@@ -27,7 +27,7 @@ REGION = "us-east-1"
 dynamodb = boto3.resource("dynamodb", region_name=REGION)
 sns = boto3.client("sns", region_name=REGION)
 
-SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:203918855127:project_topic"
+SNS_TOPIC_ARN = "arn:aws:sns:us-east-1:242201287692:aws_capstone_topic"
 
 users_table = dynamodb.Table("SnapStreamUsers")
 media_table = dynamodb.Table("SnapStreamMedia")
