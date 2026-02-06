@@ -75,8 +75,12 @@ def add_notification(email, title, message):
     )
 
 def get_user(email):
-    res = users_table.get_item(Key={"email": email})
-    return res.get("Item")
+    res = users_table.query(
+        IndexName="email-index",
+        KeyConditionExpression=Key("email").eq(email)
+    )
+    items = res.get("Items", [])
+    return items[0] if items else None
 
 # ===================== PAGES =====================
 @app.route("/")
