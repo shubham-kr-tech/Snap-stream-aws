@@ -1,6 +1,6 @@
 /**
  * SnapStream - Authentication JavaScript
- * REAL backend integration with Flask APIs
+ * FINAL working version for Flask + AWS
  */
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -33,7 +33,7 @@ async function handleLogin(e) {
     showFieldError("email", "Email is required");
     hasErrors = true;
   } else if (!isValidEmail(email)) {
-    showFieldError("email", "Please enter a valid email");
+    showFieldError("email", "Enter a valid email");
     hasErrors = true;
   }
 
@@ -45,38 +45,32 @@ async function handleLogin(e) {
   if (hasErrors) return;
 
   submitBtn.disabled = true;
-  submitBtn.innerHTML =
-    '<span class="spinner" style="width:1rem;height:1rem;border-width:2px;"></span> Logging in...';
+  submitBtn.innerText = "Logging in...";
 
   try {
     const res = await fetch("/api/login", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ email, password }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email, password })
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      if (window.showToast) window.showToast(data.message || "Login failed", "error");
-      else console.log(data.message || "Login failed");
+      alert(data.message || "Login failed");
       return;
     }
 
-    // ✅ Toast message (no OK button)
-    if (window.showToast) window.showToast("Login successful! Redirecting...", "success");
+    window.location.href = data.redirect || "/dashboard";
 
-    // redirect directly
-    setTimeout(() => {
-      window.location.href = data.redirect || "/dashboard";
-    }, 500);
   } catch (err) {
-    if (window.showToast) window.showToast("Server error. Try again.", "error");
-    console.log(err);
+    console.error(err);
+    alert("Server error. Try again.");
   } finally {
     submitBtn.disabled = false;
-    submitBtn.innerHTML = "Login";
+    submitBtn.innerText = "Login";
   }
 }
 
@@ -96,34 +90,22 @@ async function handleRegister(e) {
 
   let hasErrors = false;
 
-  if (!username) {
-    showFieldError("username", "Username is required");
-    hasErrors = true;
-  } else if (username.length < 3) {
+  if (!username || username.length < 3) {
     showFieldError("username", "Username must be at least 3 characters");
     hasErrors = true;
   }
 
-  if (!email) {
-    showFieldError("email", "Email is required");
-    hasErrors = true;
-  } else if (!isValidEmail(email)) {
-    showFieldError("email", "Please enter a valid email");
+  if (!email || !isValidEmail(email)) {
+    showFieldError("email", "Valid email is required");
     hasErrors = true;
   }
 
-  if (!password) {
-    showFieldError("password", "Password is required");
-    hasErrors = true;
-  } else if (password.length < 6) {
+  if (!password || password.length < 6) {
     showFieldError("password", "Password must be at least 6 characters");
     hasErrors = true;
   }
 
-  if (!confirmPassword) {
-    showFieldError("confirm-password", "Please confirm your password");
-    hasErrors = true;
-  } else if (password !== confirmPassword) {
+  if (password !== confirmPassword) {
     showFieldError("confirm-password", "Passwords do not match");
     hasErrors = true;
   }
@@ -131,65 +113,54 @@ async function handleRegister(e) {
   if (hasErrors) return;
 
   submitBtn.disabled = true;
-  submitBtn.innerHTML =
-    '<span class="spinner" style="width:1rem;height:1rem;border-width:2px;"></span> Creating account...';
+  submitBtn.innerText = "Creating account...";
 
   try {
     const res = await fetch("/api/register", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      credentials: "include",
-      body: JSON.stringify({ username, email, password }),
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ username, email, password })
     });
 
     const data = await res.json();
 
     if (!res.ok) {
-      if (window.showToast) window.showToast(data.message || "Registration failed", "error");
+      alert(data.message || "Registration failed");
       return;
     }
 
-    // ✅ Toast message (no OK button)
-    if (window.showToast) window.showToast("Account created successfully! Please login.", "success");
+    window.location.href = data.redirect || "/login";
 
-    setTimeout(() => {
-      window.location.href = data.redirect || "/login";
-    }, 700);
   } catch (err) {
-    if (window.showToast) window.showToast("Server error. Try again.", "error");
-    console.log(err);
+    console.error(err);
+    alert("Server error. Try again.");
   } finally {
     submitBtn.disabled = false;
-    submitBtn.innerHTML = "Register";
+    submitBtn.innerText = "Register";
   }
 }
 
 // ===================== HELPERS =====================
 function showFieldError(fieldId, message) {
   const field = document.getElementById(fieldId);
-  if (field) {
-    field.classList.add("error");
+  if (!field) return;
 
-    const existingError = field.parentElement.querySelector(".form-error");
-    if (existingError) existingError.remove();
+  field.classList.add("error");
 
-    const errorSpan = document.createElement("span");
-    errorSpan.className = "form-error";
-    errorSpan.textContent = message;
-    field.parentElement.appendChild(errorSpan);
-  }
+  const error = document.createElement("span");
+  error.className = "form-error";
+  error.innerText = message;
+
+  field.parentElement.appendChild(error);
 }
 
 function clearFormErrors(form) {
-  form.querySelectorAll(".form-input.error").forEach((input) => {
-    input.classList.remove("error");
-  });
-  form.querySelectorAll(".form-error").forEach((error) => {
-    error.remove();
-  });
+  form.querySelectorAll(".form-error").forEach(e => e.remove());
+  form.querySelectorAll(".error").forEach(e => e.classList.remove("error"));
 }
 
 function isValidEmail(email) {
-  const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return re.test(email);
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
