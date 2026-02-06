@@ -4,22 +4,21 @@ import uuid
 from datetime import datetime
 
 import boto3
-from boto3.dynamodb.conditions import Key
 from botocore.exceptions import ClientError
 from werkzeug.utils import secure_filename
 
 # ===================== APP =====================
 app = Flask(__name__, template_folder="templates", static_folder="static")
-app.secret_key = "snapstream_secret_key_here"
 
-app.config["SESSION_COOKIE_SAMESITE"] = "Lax"
-app.config["SESSION_COOKIE_SECURE"] = False
+# 🔐 SECRET KEY (important for session)
+app.secret_key = "snapstream_super_secret_key_123"
 
-@app.before_request
-def clear_old_session_once():
-    if session.get("fresh_start") != True:
-        session.clear()
-        session["fresh_start"] = True
+# ✅ SESSION CONFIG (HTTP + EC2 safe)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=False   # HTTP use kar rahe ho
+)
 
 # ===================== AWS CONFIG =====================
 REGION = "us-east-1"
@@ -74,13 +73,10 @@ def add_notification(email, title, message):
         }
     )
 
+# 🔑 USERS TABLE ka PRIMARY KEY = email
 def get_user(email):
-    res = users_table.query(
-        IndexName="email-index",
-        KeyConditionExpression=Key("email").eq(email)
-    )
-    items = res.get("Items", [])
-    return items[0] if items else None
+    res = users_table.get_item(Key={"email": email})
+    return res.get("Item")
 
 # ===================== PAGES =====================
 @app.route("/")
@@ -113,12 +109,6 @@ def media():
         return redirect(url_for("login_page"))
     return render_template("media.html")
 
-@app.route("/media_detail")
-def media_detail():
-    if not require_login():
-        return redirect(url_for("login_page"))
-    return render_template("media_detail.html")
-
 @app.route("/notifications")
 def notification_page():
     if not require_login():
@@ -134,7 +124,6 @@ def profile():
 @app.route("/logout")
 def logout_page():
     session.clear()
-    session["fresh_start"] = True
     return redirect(url_for("login_page"))
 
 # ===================== AUTH APIs =====================
@@ -169,6 +158,7 @@ def api_login():
     if not user or user["password"] != password:
         return jsonify({"success": False, "message": "Invalid credentials"}), 401
 
+    # ✅ SESSION SAVE
     session["user_email"] = email
     session["username"] = user["username"]
 
@@ -176,64 +166,6 @@ def api_login():
     send_notification("User Login", email)
 
     return jsonify({"success": True, "redirect": "/dashboard"}), 200
-
-# ===================== MEDIA APIs =====================
-@app.route("/api/upload", methods=["POST"])
-def api_upload():
-    if not require_login():
-        return jsonify({"success": False}), 401
-
-    file = request.files.get("file")
-    if not file or not allowed_file(file.filename):
-        return jsonify({"success": False, "message": "Invalid file"}), 400
-
-    filename = secure_filename(file.filename)
-    media_id = str(uuid.uuid4())
-    stored_name = f"{media_id}_{filename}"
-
-    path = os.path.join(app.config["UPLOAD_FOLDER"], stored_name)
-    file.save(path)
-
-    media_table.put_item(
-        Item={
-            "id": media_id,
-            "email": session["user_email"],
-            "filename": filename,
-            "stored_name": stored_name,
-            "uploaded_at": now(),
-            "status": "Completed",
-        }
-    )
-
-    add_notification(session["user_email"], "Upload Completed", filename)
-    send_notification("Upload Completed", filename)
-
-    return jsonify({"success": True}), 201
-
-@app.route("/api/media")
-def api_media_list():
-    if not require_login():
-        return jsonify({"success": False}), 401
-
-    res = media_table.query(
-        IndexName="email-index",
-        KeyConditionExpression=Key("email").eq(session["user_email"])
-    )
-
-    return jsonify({"success": True, "media": res["Items"]})
-
-# ===================== NOTIFICATIONS =====================
-@app.route("/api/notifications")
-def api_notifications():
-    if not require_login():
-        return jsonify({"success": False}), 401
-
-    res = notifications_table.query(
-        IndexName="email-index",
-        KeyConditionExpression=Key("email").eq(session["user_email"])
-    )
-
-    return jsonify({"success": True, "notifications": res["Items"]})
 
 # ===================== RUN =====================
 if __name__ == "__main__":
